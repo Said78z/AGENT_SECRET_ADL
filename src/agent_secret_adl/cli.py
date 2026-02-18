@@ -12,6 +12,7 @@ from rich.table import Table
 from agent_secret_adl.extraction import extract_admissibles_from_pdf
 from agent_secret_adl.enrichment import enrich_with_hunter
 from agent_secret_adl.enrichment.phones import enrich_with_phones
+from agent_secret_adl.enrichment.prod_mobile import MobileEnricher
 
 # Configuration
 console = Console()
@@ -543,6 +544,187 @@ def enrich_phones(
         console.print(f"[bold red]❌ Erreur traitement :[/bold red] {e}")
         raise typer.Exit(code=1)
 
+    except Exception as e:
+        console.print(f"[bold red]❌ Erreur inattendue :[/bold red] {e}")
+        if verbose:
+            console.print_exception()
+        raise typer.Exit(code=1)
+
+
+@app.command("enrich-mobile-prod")
+def enrich_mobile_prod(
+    input_csv: str = typer.Option(
+        ...,
+        "--input-csv",
+        help="CSV d'entrée (sortie extract-admissibles recommandée)",
+        metavar="PATH",
+    ),
+    output_csv: str = typer.Option(
+        ...,
+        "--output-csv",
+        help="CSV enrichi avec mobiles VTC",
+        metavar="PATH",
+    ),
+    max_batch: int = typer.Option(
+        50,
+        "--max-batch",
+        help="Nombre max de candidats à enrichir (contrôle budget APIs)",
+        metavar="INT",
+    ),
+    google_cse_key: str = typer.Option(
+        None,
+        "--google-cse-key",
+        help="Google Custom Search API key (optionnel)",
+        metavar="KEY",
+    ),
+    google_cse_id: str = typer.Option(
+        None,
+        "--google-cse-id",
+        help="Google Custom Search Engine ID (optionnel)",
+        metavar="ID",
+    ),
+    numverify_key: str = typer.Option(
+        None,
+        "--numverify-key",
+        help="Numverify API key pour validation (optionnel)",
+        metavar="KEY",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Mode verbose (debug logs)",
+    ),
+) -> None:
+    """📱 Enrichit un CSV avec numéros mobiles VTC (PRODUCTION).
+
+    Stratégie multi-source pour trouver mobiles français 06/07 :
+    - Google Custom Search Dorks (100 queries/jour gratuit)
+    - Scraping annonces (Leboncoin, LinkedIn)
+    - 118712.fr API (annuaire français)
+    - Validation Numverify (100 checks/jour gratuit)
+
+    Taux visé : 40% découverte + 90% validation.
+    Budget : 0€ avec free tiers.
+
+    Exemple :
+        agent-secret-adl enrich-mobile-prod \\
+            --input-csv admissibles.csv \\
+            --output-csv admissibles_mobiles.csv \\
+            --max-batch 50
+    """
+    # Configuration logging
+    if verbose:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
+
+    logger.debug("enrich-mobile-prod appelée")
+
+    console.print(
+        "[bold cyan]📱 AGENT_SECRET_ADL - Enrichissement Mobile PROD[/bold cyan]"
+    )
+    console.print()
+
+    try:
+        # Validation
+        if max_batch < 1:
+            raise ValueError("max_batch doit être >= 1")
+
+        input_path = Path(input_csv)
+        if not input_path.exists():
+            raise FileNotFoundError(f"Fichier {input_csv} non trouvé")
+
+        if not input_path.suffix == ".csv":
+            raise ValueError(f"Fichier doit être CSV (trouvé: {input_path.suffix})")
+
+        # Afficher paramètres
+        table = Table(title="📋 Paramètres enrichissement mobile", show_header=True)
+        table.add_column("Paramètre", style="cyan", width=20)
+        table.add_column("Valeur", style="green")
+        table.add_row("CSV d'entrée", input_csv)
+        table.add_row("CSV de sortie", output_csv)
+        table.add_row("Max batch", str(max_batch))
+        table.add_row("Google CSE", "✅" if google_cse_key else "❌ (optionnel)")
+        table.add_row("Numverify", "✅" if numverify_key else "❌ (optionnel)")
+        console.print(table)
+        console.print()
+
+        # Charger CSV
+        console.print("[bold yellow]⏳ Chargement CSV...[/bold yellow]")
+        df = pd.read_csv(input_csv)
+        console.print(f"[green]✅ {len(df)} candidats chargés[/green]")
+        console.print()
+
+        # Initialiser enrichisseur
+        console.print("[bold yellow]🚀 Initialisation enrichisseur mobile...[/bold yellow]")
+        enricher = MobileEnricher(
+            google_cse_key=google_cse_key,
+            google_cse_id=google_cse_id,
+            numverify_key=numverify_key,
+        )
+        console.print("[green]✅ Enrichisseur prêt[/green]")
+        console.print()
+
+        # Recherche mobile
+        console.print(
+            "[bold yellow]📱 Recherche numéros mobiles (06/07)...[/bold yellow]"
+        )
+        df_enriched = enricher.search_mobile_batch(df, max_batch=max_batch)
+        console.print()
+
+        # Export
+        console.print("[bold yellow]💾 Export CSV...[/bold yellow]")
+        enricher.export_csv(df_enriched, output_csv, include_raw=verbose)
+        console.print()
+
+        # Stats
+        stats = enricher.get_stats()
+        enricher.print_stats()
+
+        table = Table(title="📊 Résumé enrichissement mobile", show_header=True)
+        table.add_column("Métrique", style="cyan", width=25)
+        table.add_column("Valeur", style="green", width=20)
+        table.add_row("Total traités", str(stats["total_processed"]))
+        table.add_row(
+            "Mobiles trouvés",
+            f"{stats['mobile_found']} ({stats['success_rate']:.1f}%)",
+        )
+        table.add_row(
+            "Mobiles validés",
+            f"{stats['mobile_validated']} ({stats['validation_rate']:.1f}%)",
+        )
+        if stats["errors"] > 0:
+            table.add_row("Erreurs", str(stats["errors"]))
+        table.add_row("Fichier généré", output_csv)
+        console.print(table)
+        console.print()
+
+        console.print(
+            "[bold cyan]💡 Sources utilisées :[/bold cyan]\n"
+            "  • Google Dorks - Recherche VTC 06/07 (100 queries/jour gratuit)\n"
+            "  • Scraping annonces - Leboncoin, LinkedIn (respectueux)\n"
+            "  • 118712.fr API - Annuaire français professionnel\n"
+            "  • Numverify - Validation mobiles (100/jour gratuit)\n"
+        )
+        console.print()
+        console.print(
+            "[bold green]✅ Fichier prêt pour SMS/WhatsApp Business ![/bold green]"
+        )
+        console.print()
+
+    except FileNotFoundError as e:
+        console.print(f"[bold red]❌ Erreur fichier :[/bold red] {e}")
+        raise typer.Exit(code=1)
+    except ValueError as e:
+        console.print(f"[bold red]❌ Erreur validation :[/bold red] {e}")
+        raise typer.Exit(code=1)
     except Exception as e:
         console.print(f"[bold red]❌ Erreur inattendue :[/bold red] {e}")
         if verbose:
