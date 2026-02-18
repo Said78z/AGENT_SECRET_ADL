@@ -2,6 +2,8 @@
 
 from typing import List, Dict, Any
 
+from .extract_admissibles import extract_admissibles_from_pdf
+
 
 def extract_from_pdf(file_path: str) -> List[Dict[str, Any]]:
     """
@@ -33,4 +35,8 @@ def validate_extraction(data: List[Dict[str, Any]]) -> bool:
     pass
 
 
-__all__ = ["extract_from_pdf", "validate_extraction"]
+__all__ = [
+    "extract_from_pdf",
+    "validate_extraction",
+    "extract_admissibles_from_pdf",
+]

@@ -25,9 +25,38 @@ src/
 ```
 
 ## Usage
+
+### Via CLI
 ```bash
+# Afficher l'aide
 python -m agent_secret_adl --help
+
+# Extraire les admissibles depuis un PDF
+python -m agent_secret_adl extract \
+  data/admissibles.pdf \
+  --output output/admissibles.csv \
+  --departement 75 \
+  --session-date 2024-01-15
+```
+
+### Via Python
+```python
+from agent_secret_adl.extraction import extract_admissibles_from_pdf
+
+extract_admissibles_from_pdf(
+    pdf_path="data/admissibles.pdf",
+    output_csv_path="output/admissibles.csv",
+    departement="75",
+    session_date="2024-01-15",
+)
 ```
 
 ## Architecture
 Architecture simple et modulaire pour éviter la dette technique et faciliter l'évolution.
+
+## Modules
+
+- **extraction** : Extraction des listes depuis PDF
+- **normalization** : Nettoyage et standardisation des données
+- **enrichment** : Enrichissement optionnel (emails, etc.)
+- **reporting** : Export en CSV et génération de rapports
