@@ -1,62 +1,124 @@
-# AGENT_SECRET_ADL
+# 🚕 AGENT_SECRET_ADL
 
-**Agent Secret ADL** est un outil léger et modulaire pour extraire, normaliser et enrichir les listes de candidats admissibles aux licences TAXIS et VTC depuis des documents PDF officiels.
+Outil pour extraire les candidats **ADMISSIBLE** depuis des PDF officiels TAXIS/VTC en France, et récupérer leurs **téléphones + emails**.
 
-## Fonctionnalités
-- **Extraction** : Récupère les données candidates depuis des PDF
-- **Normalisation** : Nettoie et standardise les informations
-- **Enrichissement** (optionnel) : Ajoute des données supplémentaires via APIs gratuites
-- **Reporting** : Exporte les résultats en CSV structuré
+---
 
-## Installation
+## ⚙️ Installation (Une seule fois)
+
 ```bash
+cd /home/saidk/agent_vtc/AGENT_SECRET_ADL
+
+# Crée un environnement Python
+python3 -m venv venv
+source venv/bin/activate
+
+# Installe les dépendances
 pip install -r requirements.txt
 ```
 
-## Structure du projet
-```
-src/
-  agent_secret_adl/
-    config.py           # Configuration globale
-    extraction/         # Module d'extraction PDF
-    normalization/      # Module de normalisation
-    enrichment/         # Module d'enrichissement optionnel
-    reporting/          # Module de reporting CSV
-```
+---
 
-## Usage
+## 🎯 Utilisation
 
-### Via CLI
+### Étape 1 : Mets ton PDF ici
 ```bash
-# Afficher l'aide
-python -m agent_secret_adl --help
-
-# Extraire les admissibles depuis un PDF
-python -m agent_secret_adl extract \
-  data/admissibles.pdf \
-  --output output/admissibles.csv \
-  --departement 75 \
-  --session-date 2024-01-15
+# Place ton fichier PDF dans le dossier
+# Exemple: 2025_FEV_ADMISSIBLES_MARSEILLE.pdf
 ```
 
-### Via Python
-```python
-from agent_secret_adl.extraction import extract_admissibles_from_pdf
-
-extract_admissibles_from_pdf(
-    pdf_path="data/admissibles.pdf",
-    output_csv_path="output/admissibles.csv",
-    departement="75",
-    session_date="2024-01-15",
-)
+### Étape 2 : Lance la commande
+```bash
+# Remplace les valeurs avec tes infos
+python -m agent_secret_adl.cli extract-admissibles \
+    --pdf-path 2025_FEV_ADMISSIBLES_MARSEILLE.pdf \
+    --output-csv resultats.csv \
+    --departement 13 \
+    --session-date 2025-02-18
 ```
 
-## Architecture
-Architecture simple et modulaire pour éviter la dette technique et faciliter l'évolution.
+**Résultat** : `resultats.csv` avec tous les candidats ADMISSIBLE ✅
 
-## Modules
+### (Optionnel) Étape 3 : Ajoute les téléphones + emails
+```bash
+python -m agent_secret_adl.cli enrich-phones \
+    --input-csv resultats.csv \
+    --output-csv resultats_complets.csv
+```
 
-- **extraction** : Extraction des listes depuis PDF
-- **normalization** : Nettoyage et standardisation des données
-- **enrichment** : Enrichissement optionnel (emails, etc.)
-- **reporting** : Export en CSV et génération de rapports
+**Résultat** : `resultats_complets.csv` avec téléphones + emails ✅
+
+---
+
+## 📋 Colonnes du CSV final
+
+```
+categorie,numero_candidat,prenom,nom,decision,departement,session_date,email,phone,phone_source
+TAXIS,527805,Zineb,AIT ELDJOUDI,ADMISSIBLE,78,2025-02-25,zineb.aiteldjoudi@example.com,01 23 45 67 89,SIRENE
+VTC,494980,Faysale,AIT BIHI,ADMISSIBLE,78,2025-02-25,faysale.aitbihi@example.com,02 12 34 56 78,Pages Jaunes
+```
+
+---
+
+## 🔧 Paramètres
+
+### extract-admissibles
+- `--pdf-path` : Chemin du fichier PDF (requis)
+- `--output-csv` : Chemin du CSV de sortie (requis)
+- `--departement` : Code département (ex: 78, 13, Paris)
+- `--session-date` : Date session (ex: 2025-02-25)
+
+### enrich-phones
+- `--input-csv` : CSV d'entrée (requis)
+- `--output-csv` : CSV de sortie (requis)
+- `--max-rows` : Nombre max de candidats à traiter (défaut: 50)
+
+---
+
+## 📊 Exemple Complet
+
+```bash
+# 1. Extraction
+python -m agent_secret_adl.cli extract-admissibles \
+    --pdf-path admissibles.pdf \
+    --output-csv step1.csv \
+    --departement 78 \
+    --session-date 2025-02-25
+
+# 2. Enrichissement (mails + tels)
+python -m agent_secret_adl.cli enrich-phones \
+    --input-csv step1.csv \
+    --output-csv step2_final.csv
+
+# 3. Vérifie le résultat
+head step2_final.csv
+```
+
+---
+
+## ✅ Ce qui fonctionne
+
+✓ Extraction PDF (parsing intelligent)  
+✓ Filtrage ADMISSIBLE uniquement  
+✓ Téléphones (SIRENE, Pages Jaunes, etc.)  
+✓ Emails (Hunter.io)  
+✓ CSV propre et structuré  
+✓ Format FR standard pour numéros  
+
+---
+
+## 🆘 Debug
+
+```bash
+# Mode verbose (logs détaillés)
+python -m agent_secret_adl.cli extract-admissibles \
+    --pdf-path file.pdf \
+    --output-csv out.csv \
+    --departement 78 \
+    --session-date 2025-02-25 \
+    --verbose
+```
+
+---
+
+**C'est tout ce que tu dois savoir ! 🚀**

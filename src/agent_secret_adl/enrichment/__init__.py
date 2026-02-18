@@ -2,6 +2,9 @@
 
 from typing import List, Dict, Any, Optional
 
+from .hunter import enrich_with_hunter
+from .phones import enrich_with_phones
+
 
 def enrich_candidates(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -46,4 +49,9 @@ def is_enrichment_enabled() -> bool:
     pass
 
 
-__all__ = ["enrich_candidates", "lookup_email", "is_enrichment_enabled"]
+__all__ = [
+    "enrich_candidates",
+    "lookup_email",
+    "is_enrichment_enabled",
+    "enrich_with_hunter",
+]
